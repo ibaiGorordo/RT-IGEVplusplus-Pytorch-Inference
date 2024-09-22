@@ -175,9 +175,7 @@ class IGEVStereo(nn.Module):
             context = self.cnet(features_left[0])
             context = list(self.context_zqr_conv(context).split(split_size=self.args.hidden_dim, dim=1))
 
-
-        geo_block = Combined_Geo_Encoding_Volume
-        geo_fn = geo_block(geo_encoding_volume.float(), radius=self.args.corr_radius, num_levels=self.args.corr_levels)
+        geo_fn = Combined_Geo_Encoding_Volume(geo_encoding_volume.float(), radius=self.args.corr_radius, num_levels=self.args.corr_levels)
         b, c, h, w = match_left.shape
         coords = torch.arange(w).float().to(match_left.device).reshape(1,1,w,1).repeat(b, h, 1, 1)
         disp = init_disp

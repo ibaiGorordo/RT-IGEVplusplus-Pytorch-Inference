@@ -164,61 +164,20 @@ def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
             volume[:, :, i, :, :] = groupwise_correlation(refimg_fea, targetimg_fea, num_groups)
     volume = volume.contiguous()
     return volume
-        
-
-
 
 def norm_correlation(fea1, fea2):
     cost = torch.mean(((fea1/(torch.norm(fea1, 2, 1, True)+1e-05)) * (fea2/(torch.norm(fea2, 2, 1, True)+1e-05))), dim=1, keepdim=True)
     return cost
 
-def build_norm_correlation_volume(refimg_fea, targetimg_fea, maxdisp):
-    B, C, H, W = refimg_fea.shape
-    volume = refimg_fea.new_zeros([B, 1, maxdisp, H, W])
-    for i in range(maxdisp):
-        if i > 0:
-            volume[:, :, i, :, i:] = norm_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i])
-        else:
-            volume[:, :, i, :, :] = norm_correlation(refimg_fea, targetimg_fea)
-    volume = volume.contiguous()
-    return volume
-
 def correlation(fea1, fea2):
     cost = torch.sum((fea1 * fea2), dim=1, keepdim=True)
     return cost
-
-def build_correlation_volume(refimg_fea, targetimg_fea, maxdisp):
-    B, C, H, W = refimg_fea.shape
-    volume = refimg_fea.new_zeros([B, 1, maxdisp, H, W])
-    for i in range(maxdisp):
-        if i > 0:
-            volume[:, :, i, :, i:] = correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i])
-        else:
-            volume[:, :, i, :, :] = correlation(refimg_fea, targetimg_fea)
-    volume = volume.contiguous()
-    return volume
-
-
-
-def build_concat_volume(refimg_fea, targetimg_fea, maxdisp):
-    B, C, H, W = refimg_fea.shape
-    volume = refimg_fea.new_zeros([B, 2 * C, maxdisp, H, W])
-    for i in range(maxdisp):
-        if i > 0:
-            volume[:, :C, i, :, :] = refimg_fea[:, :, :, :]
-            volume[:, C:, i, :, i:] = targetimg_fea[:, :, :, :-i]
-        else:
-            volume[:, :C, i, :, :] = refimg_fea
-            volume[:, C:, i, :, :] = targetimg_fea
-    volume = volume.contiguous()
-    return volume
 
 def disparity_regression(prob, maxdisp, interval):
     assert len(prob.shape) == 4
     disp_values = torch.arange(0, maxdisp, interval, dtype=prob.dtype, device=prob.device)
     disp_values = disp_values.view(1, maxdisp//interval, 1, 1)
     return torch.sum(prob * disp_values, 1, keepdim=True)
-
 
 class FeatureAtt(nn.Module):
     def __init__(self, cv_chan, feat_chan):
@@ -229,8 +188,6 @@ class FeatureAtt(nn.Module):
             nn.Conv2d(feat_chan//2, cv_chan, 1))
 
     def forward(self, cv, feat):
-        '''
-        '''
         feat_att = self.feat_att(feat).unsqueeze(2)
         cv = torch.sigmoid(feat_att)*cv
         return cv
