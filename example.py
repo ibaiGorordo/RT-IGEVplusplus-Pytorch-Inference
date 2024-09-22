@@ -30,7 +30,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     model = IGEVStereo(args)
-    checkpoint = torch.load(args.restore_ckpt)
+    checkpoint = torch.load(args.restore_ckpt, weights_only=True)
 
     # Remove module. from name since we are not using DataParallel
     for key in list(checkpoint.keys()):
