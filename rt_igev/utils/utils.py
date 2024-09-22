@@ -32,7 +32,7 @@ def bilinear_sampler(img, coords):
     xgrid = 2*xgrid/(W-1) - 1
 
     # print("######88888", xgrid)
-    assert torch.unique(ygrid).numel() == 1 and H == 1 # This is a stereo problem
+    # assert torch.unique(ygrid).numel() == 1 and H == 1 # This is a stereo problem
 
     grid = torch.cat([xgrid, ygrid], dim=-1)
     # print("###37777", grid.shape)

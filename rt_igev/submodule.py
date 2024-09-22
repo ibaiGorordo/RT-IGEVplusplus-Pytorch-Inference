@@ -61,11 +61,10 @@ class Conv2x(nn.Module):
     def forward(self, x, rem):
         x = self.conv1(x)
 
-        if x.shape != rem.shape:
-            x = F.interpolate(
-                x,
-                size=(rem.shape[-2], rem.shape[-1]),
-                mode='nearest')
+        x = F.interpolate(
+            x,
+            size=(rem.shape[-2], rem.shape[-1]),
+            mode='nearest')
         if self.concat:
             x = torch.cat((x, rem), 1)
         else: 
@@ -132,11 +131,10 @@ class Conv2x_IN(nn.Module):
 
     def forward(self, x, rem):
         x = self.conv1(x)
-        if x.shape != rem.shape:
-            x = F.interpolate(
-                x,
-                size=(rem.shape[-2], rem.shape[-1]),
-                mode='nearest')
+        x = F.interpolate(
+            x,
+            size=(rem.shape[-2], rem.shape[-1]),
+            mode='nearest')
         if self.concat:
             x = torch.cat((x, rem), 1)
         else: 
@@ -147,10 +145,10 @@ class Conv2x_IN(nn.Module):
 
 def groupwise_correlation(fea1, fea2, num_groups):
     B, C, H, W = fea1.shape
-    assert C % num_groups == 0
+    # assert C % num_groups == 0
     channels_per_group = C // num_groups
     cost = (fea1 * fea2).view([B, num_groups, channels_per_group, H, W]).mean(dim=2)
-    assert cost.shape == (B, num_groups, H, W)
+    # assert cost.shape == (B, num_groups, H, W)
     return cost
 
 def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):

@@ -85,7 +85,8 @@ class hourglass(nn.Module):
 class IGEVStereo(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.args = args       
+        self.args = args
+        self.iters = args.valid_iters
         context_dim = args.hidden_dim
         self.update_block = BasicUpdateBlock(self.args, hidden_dim=args.hidden_dim)
         self.hnet = nn.Sequential(BasicConv(96, args.hidden_dim, kernel_size=3, stride=1, padding=1),
@@ -123,11 +124,6 @@ class IGEVStereo(nn.Module):
         self.cost_agg = hourglass(8)
         self.classifier = nn.Conv3d(8, 1, 3, 1, 1, bias=False)
 
-    def freeze_bn(self):
-        for m in self.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.eval()
-
     def upsample_disp(self, disp, mask_feat_4, stem_2x):
 
         with autocast('cuda', enabled=self.args.mixed_precision):
@@ -137,8 +133,7 @@ class IGEVStereo(nn.Module):
             up_disp = context_upsample(disp*4., spx_pred)
         return up_disp
 
-
-    def forward(self, image1, image2, iters=12, flow_init=None, test_mode=False):
+    def forward(self, image1, image2):
         """ Estimate disparity between pair of frames """
 
         image1 = (2 * (image1 / 255.0) - 1.0).contiguous()
@@ -164,12 +159,6 @@ class IGEVStereo(nn.Module):
             
             del prob, gwc_volume
 
-            if not test_mode:
-                xspx = self.spx_4(features_left[0])
-                xspx = self.spx_2(xspx, stem_2x)
-                spx_pred = self.spx(xspx)
-                spx_pred = F.softmax(spx_pred, 1)
-
             hidden = self.hnet(features_left[0])
             net = torch.tanh(hidden)
             context = self.cnet(features_left[0])
@@ -179,24 +168,16 @@ class IGEVStereo(nn.Module):
         b, c, h, w = match_left.shape
         coords = torch.arange(w).float().to(match_left.device).reshape(1,1,w,1).repeat(b, h, 1, 1)
         disp = init_disp
-        disp_preds = []
 
         # GRUs iterations to update disparity
-        for itr in range(iters):
+        for itr in range(self.iters):
             disp = disp.detach()
             geo_feat = geo_fn(disp, coords)
             with autocast('cuda', enabled=self.args.mixed_precision):
                 net, mask_feat_4, delta_disp = self.update_block(net, context, geo_feat, disp)
             disp = disp + delta_disp
-            if test_mode and itr < iters-1:
-                continue
 
-            # upsample predictions
-            disp_up = self.upsample_disp(disp, mask_feat_4, stem_2x)
-            disp_preds.append(disp_up)
+        # upsample predictions
+        disp_up = self.upsample_disp(disp, mask_feat_4, stem_2x)
 
-        if test_mode:
-            return disp_up
-
-        init_disp = context_upsample(init_disp*4., spx_pred.float())
-        return init_disp, disp_preds
+        return disp_up
