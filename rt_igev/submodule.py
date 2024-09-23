@@ -153,17 +153,15 @@ def groupwise_correlation(fea1, fea2, num_groups):
 
 def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
     B, C, H, W = refimg_fea.shape
-    # volume = refimg_fea.new_zeros([B, num_groups, maxdisp, H, W])
+
+    zeros_pad = [torch.zeros(B, num_groups, H, i, dtype=refimg_fea.dtype, device=refimg_fea.device) for i in range(maxdisp)]
     volume = [groupwise_correlation(refimg_fea, targetimg_fea, num_groups).unsqueeze(2)]
     for i in range(1, maxdisp):
         row = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i], num_groups)
+        row = torch.cat([row, zeros_pad[i]], dim=3)
         volume.append(row.unsqueeze(2))
 
-    volume2 = []
-    for row in volume:
-        row2 = F.pad(row, (0, W-row.shape[-1]), 'constant', 0)
-        volume2.append(row2)
-    volume = torch.cat(volume2, dim=2)
+    volume = torch.cat(volume, dim=2)
     volume = volume.contiguous()
     return volume
 
