@@ -1,5 +1,7 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
+import cv2
 
 class InputPadder:
     """ Pads images such that dimensions are divisible by 8 """
@@ -39,3 +41,19 @@ def bilinear_sampler(img, coords):
     img = F.grid_sample(img, grid, align_corners=True)
 
     return img
+
+def process_image(img, device, divis_by=32):
+    input = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    input = torch.from_numpy(input).permute(2, 0, 1).float()
+    padder = InputPadder(input.shape, divis_by=divis_by)
+    input = padder.pad(input[None])[0].to(device)
+    return input, padder
+
+def depth_from_disp(disp, baseline, focal_length):
+    return baseline * focal_length / (disp + 1e-9)
+
+def draw_depth(depth_map, max_distance):
+    depth = np.clip(depth_map, 0, max_distance)
+    depth = depth / max_distance
+    depth = 255 - np.round(depth * 255).astype(np.uint8)
+    return cv2.applyColorMap(depth, cv2.COLORMAP_MAGMA)
