@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from rt_igev import IGEVStereo, InputPadder
-device = 'cuda'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def load_image(imfile):
     img = cv2.imread(imfile, cv2.IMREAD_COLOR)
@@ -14,53 +14,37 @@ def load_image(imfile):
     img = torch.from_numpy(img).permute(2, 0, 1).float()
     return img[None].to(device)
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--restore_ckpt', help="restore checkpoint", default='./models/sceneflow.pth')
-    parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
-    parser.add_argument('--valid_iters', type=int, default=8, help='number of flow-field updates during forward pass')
-    parser.add_argument('--hidden_dim', nargs='+', type=int, default=96, help="hidden state and context dimensions")
-    parser.add_argument('--corr_levels', type=int, default=2, help="number of levels in the correlation pyramid")
-    parser.add_argument('--corr_radius', type=int, default=4, help="width of the correlation pyramid")
-    parser.add_argument('--n_downsample', type=int, default=2, help="resolution of the disparity field (1/2^K)")
-    parser.add_argument('--n_gru_layers', type=int, default=3, help="number of hidden GRU levels")
-    parser.add_argument('--max_disp', type=int, default=192, help="max disp range")
-    return parser.parse_args()
-
 if __name__ == '__main__':
-    args = parse_args()
-    model = IGEVStereo(args)
-    checkpoint = torch.load(args.restore_ckpt, weights_only=True)
-
-    # Remove module. from name since we are not using DataParallel
-    for key in list(checkpoint.keys()):
-        if 'module' in key:
-            checkpoint[key.replace('module.', '')] = checkpoint.pop(key)
-    model.load_state_dict(checkpoint, strict=True)
+    model_path = "models/sceneflow.pth"
+    model = IGEVStereo(model_path)
     model.to(device)
     model.eval()
 
     image1 = load_image("Campus_CCW_Clear_Day_002/left.png")
     image2 = load_image("Campus_CCW_Clear_Day_002/right.png")
     padder = InputPadder(image1.shape, divis_by=32)
+    image1, image2 = padder.pad(image1, image2)
+    disp = model(image1, image2) # Warmup
 
     baseline = 0.120  # meters
     focal_length_pixels = 640
 
     max_depth = 20  # meters
+    n_tests = 10
     with torch.no_grad():
-        image1, image2 = padder.pad(image1, image2)
         start = time.perf_counter()
-        for i in range(100):
-            disp = model(image1, image2, iters=args.valid_iters, test_mode=True)
+        for i in range(n_tests):
+            disp = model(image1, image2)
         end = time.perf_counter()
-        print(f"Time taken: {(end - start) / 100:.2f} seconds")
+        print(f"Time taken: {(end - start)/n_tests:.2f} seconds")
         disp = padder.unpad(disp)
         disp = disp.cpu().numpy().squeeze()
 
         # torch.onnx.export(model,
         #                   (image1, image2),
-        #                   "model.onnx")
+        #                   "model.onnx",
+        #                   opset_version=16,
+        #                   )
 
         # Convert disparity to depth
         depth = (baseline * focal_length_pixels) / disp

@@ -29,10 +29,9 @@ class ConvGRU(nn.Module):
         return h
 
 class BasicMotionEncoder(nn.Module):
-    def __init__(self, args):
+    def __init__(self, corr_levels=2, corr_radius=4):
         super(BasicMotionEncoder, self).__init__()
-        self.args = args
-        cor_planes = args.corr_levels * (2*args.corr_radius + 1) * 8
+        cor_planes = corr_levels * (2*corr_radius + 1) * 8
         self.convc1 = nn.Conv2d(cor_planes, 64, 1, padding=0)
         self.convc2 = nn.Conv2d(64, 64, 3, padding=1)
         self.convd1 = nn.Conv2d(1, 64, 7, padding=3)
@@ -50,15 +49,13 @@ class BasicMotionEncoder(nn.Module):
         return torch.cat([out, disp], dim=1)
 
 class BasicUpdateBlock(nn.Module):
-    def __init__(self, args, hidden_dim=96):
+    def __init__(self, corr_levels=2, corr_radius=4, n_downsample=2, hidden_dim=96):
         super().__init__()
-        self.args = args
-        self.encoder = BasicMotionEncoder(args)
-        encoder_output_dim = hidden_dim
+        self.encoder = BasicMotionEncoder(corr_levels, corr_radius)
 
         self.gru = ConvGRU(hidden_dim, hidden_dim)
         self.disp_head = DispHead(hidden_dim, hidden_dim=128, output_dim=1)
-        factor = 2**self.args.n_downsample
+        factor = 2**n_downsample
 
         self.mask_feat_4 = nn.Sequential(
             nn.Conv2d(hidden_dim, 32, 3, padding=1),
